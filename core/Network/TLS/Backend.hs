@@ -24,6 +24,7 @@ module Network.TLS.Backend
 import Network.TLS.Imports
 import qualified Data.ByteString as B
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
+import Control.Monad ( when )
 
 #ifdef INCLUDE_NETWORK
 import qualified Network.Socket as Network (Socket, close)
@@ -73,12 +74,17 @@ instance HasBackend Network.Socket where
     initializeBackend _ = return ()
     getBackend sock = Backend (return ()) (Network.close sock) (Network.sendAll sock) recvAll
       where recvAll n = B.concat <$> loop n
-              where loop 0    = return []
-                    loop left = do
-                        r <- safeRecv sock left
-                        if B.null r
-                            then return []
-                            else (r:) <$> loop (left - B.length r)
+              where 
+                loop left = 
+                  if left <= 0
+                  then do
+                    when (left < 0) $ putStrLn $ "recv loop called with negative bytes left: " ++ show left
+                    return []
+                  else do
+                         r <- safeRecv sock left
+                         if B.null r
+                             then return []
+                             else (r:) <$> loop (left - B.length r)
 #endif
 
 #ifdef INCLUDE_HANS
